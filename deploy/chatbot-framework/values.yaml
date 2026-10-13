@@ -1,0 +1,36 @@
+# Change chart.version (and publish that chart release) to roll out a new chatbot version.
+chart:
+  name: pcai-chatbot
+  version: 0.1.0
+  releaseUrl: https://github.com/noshitcoding/pcai-gitops-demo/releases/download
+  museum: http://chartmuseum.ez-chartmuseum-ns.svc.cluster.local:8080
+
+framework:
+  resourceName: gitops-chatbot
+  releaseName: gitops-chatbot
+  label: GitOps Chatbot
+  category: dataScience
+  description: Chat with Qwen3 8B served by MLIS. Deployed by Argo CD from Git.
+  namespace: project-gitops-demo
+
+# Values for the pcai-chatbot chart. AI Essentials replaces ${DOMAIN_NAME}.
+chatbotValues:
+  image:
+    repository: ghcr.io/noshitcoding/pcai-chatbot
+    tag: "0.1.0"
+  mlis:
+    url: https://mlis.${DOMAIN_NAME}
+    project: gitops-demo
+    deployment: qwen3-8b-chat
+  aieToken:
+    namespace: project-user-gitops-bot
+    secret: access-token
+  ezua:
+    virtualService:
+      endpoint: "chatbot.${DOMAIN_NAME}"
+      istioGateway: "istio-system/ezaf-gateway"
+    authorizationPolicy:
+      namespace: "istio-system"
+      providerName: "oauth2-proxy"
+      matchLabels:
+        istio: "ingressgateway"

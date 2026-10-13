@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pcai-chatbot
+description: Gradio chat front end for a model served by MLIS on HPE Private Cloud AI
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

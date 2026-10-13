@@ -1,0 +1,27 @@
+# Framework object of AI Essentials. The EzApp controller installs the chart from the
+# chart museum into framework.namespace and shows a tile on Tools & Frameworks.
+apiVersion: ezconfig.hpe.ezaf.com/v1alpha1
+kind: EzAppConfig
+metadata:
+  name: {{ .Values.framework.resourceName }}
+  labels:
+    hpe-ezua/app: {{ .Values.framework.releaseName }}
+spec:
+  name: {{ .Values.chart.name }}
+  label: {{ .Values.framework.label | quote }}
+  description: {{ .Values.framework.description | quote }}
+  category: {{ .Values.framework.category }}
+  version: {{ .Values.chatbotValues.image.tag | quote }}
+  chartVersion: {{ .Values.chart.version | quote }}
+  releaseName: {{ .Values.framework.releaseName }}
+  install: true
+  autoHelm: false
+  backoffLimit: 3
+  logoImage: {{ .Files.Get "logo.png" | b64enc | quote }}
+  options:
+    namespace: {{ .Values.framework.namespace }}
+    create-namespace: false
+    timeout: 15m
+    wait: false
+  values: |
+    {{- toYaml .Values.chatbotValues | nindent 4 }}

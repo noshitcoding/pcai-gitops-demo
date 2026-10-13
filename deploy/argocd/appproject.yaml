@@ -1,0 +1,21 @@
+# Applied once in the external Argo CD (namespace argocd).
+# The project limits what the demo may deploy, independent of the Kubernetes rights on PCAI.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: pcai-gitops-demo
+  namespace: argocd
+spec:
+  description: Demo applications on PCAI3, limited to one AIE project namespace
+  sourceRepos:
+    - https://github.com/noshitcoding/pcai-gitops-demo.git
+  destinations:
+    - name: pcai3
+      namespace: project-gitops-demo
+  clusterResourceWhitelist:
+    # The only cluster-wide object: the AIE framework entry of the chatbot.
+    - {group: ezconfig.hpe.ezaf.com, kind: EzAppConfig}
+  namespaceResourceWhitelist:
+    - {group: "", kind: ConfigMap}
+    - {group: "", kind: ServiceAccount}
+    - {group: batch, kind: Job}

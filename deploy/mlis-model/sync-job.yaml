@@ -1,0 +1,46 @@
+# Runs after every sync of this application and brings MLIS to the state in model.json.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mlis-sync
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 4200
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mlis-sync
+      annotations:
+        # An Istio sidecar would keep the Job running after the script ends.
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: mlis-sync
+      restartPolicy: Never
+      containers:
+        - name: sync
+          image: python:3.12-slim
+          command: ["python3", "-u", "/app/mlis_sync.py", "/config/model.json"]
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: script, mountPath: /app, readOnly: true}
+            - {name: config, mountPath: /config, readOnly: true}
+      volumes:
+        - name: script
+          configMap: {name: mlis-sync-script}
+        - name: config
+          configMap: {name: mlis-model}

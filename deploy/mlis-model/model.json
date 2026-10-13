@@ -1,0 +1,48 @@
+{
+  "state": "present",
+  "mlisUrl": "https://mlis.pcai3.ctc.sg.lab",
+  "project": "gitops-demo",
+  "tokenSecret": {
+    "namespace": "project-user-gitops-bot",
+    "name": "access-token",
+    "key": "AUTH_TOKEN"
+  },
+  "registry": {
+    "name": "hf-gitops-demo",
+    "type": "huggingface",
+    "endpointUrl": "https://huggingface.co"
+  },
+  "model": {
+    "name": "qwen3-8b",
+    "description": "Qwen3 8B from Hugging Face, served by vLLM, managed by Argo CD",
+    "modelFormat": "vllm",
+    "url": "hf://Qwen/Qwen3-8B",
+    "arguments": [
+      "--served-model-name=qwen3-8b",
+      "--max-model-len=8192",
+      "--gpu-memory-utilization=0.90",
+      "--reasoning-parser=qwen3",
+      "--enable-prefix-caching"
+    ],
+    "environment": {
+      "VLLM_NO_USAGE_STATS": "1",
+      "DO_NOT_TRACK": "1"
+    },
+    "resources": {
+      "gpuType": "",
+      "requests": {"cpu": "4", "memory": "32Gi", "gpu": "1"},
+      "limits": {"cpu": "8", "memory": "48Gi", "gpu": "1"}
+    }
+  },
+  "deployment": {
+    "name": "qwen3-8b-chat",
+    "namespace": "project-gitops-demo",
+    "security": {"authenticationRequired": true},
+    "autoScaling": {"minReplicas": 1, "maxReplicas": 1, "metric": "rps", "target": 0},
+    "environment": {},
+    "arguments": [],
+    "goalStatus": "Ready"
+  },
+  "updateStrategy": "pause-edit-resume",
+  "waitTimeoutSeconds": 3600
+}

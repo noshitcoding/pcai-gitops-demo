@@ -1,0 +1,39 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ printf "%s-%s-virtual-service" .Release.Name .Chart.Name }}
+spec:
+  gateways:
+    - {{ .Values.ezua.virtualService.istioGateway | required ".Values.ezua.virtualService.istioGateway is required" }}
+  hosts:
+    - {{ .Values.ezua.virtualService.endpoint | required ".Values.ezua.virtualService.endpoint is required" }}
+  http:
+    - match:
+        - uri:
+            prefix: /
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: {{ .Release.Name }}.{{ .Release.Namespace }}.svc.cluster.local
+            port:
+              number: {{ .Values.service.port }}
+      timeout: 900s
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ printf "%s-%s-auth-policy" .Release.Name .Chart.Name }}
+  namespace: {{ .Values.ezua.authorizationPolicy.namespace | required ".Values.ezua.authorizationPolicy.namespace is required" }}
+spec:
+  action: CUSTOM
+  provider:
+    name: {{ .Values.ezua.authorizationPolicy.providerName | required ".Values.ezua.authorizationPolicy.providerName is required" }}
+  rules:
+    - to:
+        - operation:
+            hosts:
+              - {{ .Values.ezua.virtualService.endpoint }}
+  selector:
+    matchLabels:
+      {{- toYaml .Values.ezua.authorizationPolicy.matchLabels | nindent 6 }}

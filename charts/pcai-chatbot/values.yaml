@@ -1,0 +1,33 @@
+image:
+  repository: ghcr.io/noshitcoding/pcai-chatbot
+  tag: "0.1.0"
+
+# Fixed name: the token reader RoleBinding on PCAI refers to it.
+serviceAccountName: chatbot
+
+service:
+  port: 80
+
+mlis:
+  url: https://mlis.pcai3.ctc.sg.lab
+  project: gitops-demo
+  deployment: qwen3-8b-chat
+
+aieToken:
+  namespace: project-user-gitops-bot
+  secret: access-token
+
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+  limits: {cpu: "1", memory: 1Gi}
+
+# Platform options read by AI Essentials (see "Preparing the Framework Helm Chart")
+ezua:
+  virtualService:
+    endpoint: "chatbot.${DOMAIN_NAME}"
+    istioGateway: "istio-system/ezaf-gateway"
+  authorizationPolicy:
+    namespace: "istio-system"
+    providerName: "oauth2-proxy"
+    matchLabels:
+      istio: "ingressgateway"
