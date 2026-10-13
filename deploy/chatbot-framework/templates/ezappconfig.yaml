@@ -19,9 +19,10 @@ spec:
   backoffLimit: 3
   logoImage: {{ .Files.Get "logo.png" | b64enc | quote }}
   options:
-    namespace: {{ .Values.framework.namespace }}
-    create-namespace: false
+    # The admission webhook accepts only strings here.
+    namespace: {{ .Values.framework.namespace | quote }}
+    create-namespace: "false"
     timeout: 15m
-    wait: false
+    wait: "false"
   values: |
     {{- toYaml .Values.chatbotValues | nindent 4 }}
