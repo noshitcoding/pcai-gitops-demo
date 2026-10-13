@@ -101,6 +101,15 @@ def status_text():
         return f"MLIS not reachable: {err}"
 
 
+def text_of(content):
+    # Gradio 6 may store message content as a list of typed parts.
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(p.get("text", "") for p in content if isinstance(p, dict))
+    return ""
+
+
 def chat(message, history, show_reasoning):
     try:
         url = endpoint()
@@ -110,9 +119,10 @@ def chat(message, history, show_reasoning):
         return
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for item in history:
-        if item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
-            messages.append({"role": item["role"], "content": item["content"]})
-    messages.append({"role": "user", "content": message})
+        text = text_of(item.get("content"))
+        if item.get("role") in ("user", "assistant") and text:
+            messages.append({"role": item["role"], "content": text})
+    messages.append({"role": "user", "content": text_of(message)})
     body = {
         "model": model, "messages": messages, "stream": True,
         "max_tokens": 1024, "temperature": 0.7, "top_p": 0.8,
@@ -160,4 +170,4 @@ with gr.Blocks(title="PCAI GitOps Chat") as demo:
 
 if __name__ == "__main__":
     demo.queue().launch(server_name="0.0.0.0", server_port=7860, theme=THEME, css=CSS,
-                        show_api=False)
+                        footer_links=[], ssr_mode=False)
