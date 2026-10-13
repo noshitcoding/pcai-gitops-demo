@@ -1,7 +1,8 @@
 """Small chat front end for a model that MLIS serves on HPE Private Cloud AI.
 
-The app finds the model endpoint through the MLIS API and authenticates with the
-access token that AI Essentials keeps for the technical user.
+The app finds the model endpoint through the MLIS API with the access token that
+AI Essentials keeps for the technical user. Inference requests use the API token
+that an administrator generated for the endpoint (mounted from a secret).
 """
 import base64
 import json
@@ -19,6 +20,7 @@ DEPLOYMENT = os.environ.get("MLIS_DEPLOYMENT", "")
 TOKEN_NAMESPACE = os.environ.get("TOKEN_NAMESPACE", "")
 TOKEN_SECRET = os.environ.get("TOKEN_SECRET", "access-token")
 MODEL_ENDPOINT = os.environ.get("MODEL_ENDPOINT", "").rstrip("/")
+MODEL_TOKEN_FILE = os.environ.get("MODEL_TOKEN_FILE", "")
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT", "You are a concise assistant running on HPE Private Cloud AI.")
 SA_DIR = os.environ.get("SA_DIR", "/var/run/secrets/kubernetes.io/serviceaccount")
@@ -62,6 +64,16 @@ def aie_token():
     return cached("token", 60, load)
 
 
+def model_token():
+    # Read on every request: Kubernetes updates the mounted secret after a rotation.
+    if MODEL_TOKEN_FILE and os.path.exists(MODEL_TOKEN_FILE):
+        with open(MODEL_TOKEN_FILE) as f:
+            token = f.read().strip()
+        if token:
+            return token
+    return aie_token()
+
+
 def deployment():
     def load():
         for dep in get_json(MLIS_URL + "/api/v1/deployments", aie_token(), TLS):
@@ -85,7 +97,7 @@ def endpoint():
 
 def model_id(url):
     return cached("model:" + url, 300,
-                  lambda: get_json(url + "/v1/models", aie_token(), TLS)["data"][0]["id"])
+                  lambda: get_json(url + "/v1/models", model_token(), TLS)["data"][0]["id"])
 
 
 def status_text():
@@ -129,7 +141,7 @@ def chat(message, history, show_reasoning):
         "chat_template_kwargs": {"enable_thinking": bool(show_reasoning)},
     }
     req = urllib.request.Request(url + "/v1/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Authorization": "Bearer " + aie_token(),
+                                 headers={"Authorization": "Bearer " + model_token(),
                                           "Content-Type": "application/json"})
     reasoning, answer = "", ""
     try:

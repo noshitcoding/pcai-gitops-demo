@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/noshitcoding/pcai-chatbot
-  tag: "0.1.0"
+  tag: "0.1.2"
 
 # Fixed name: the token reader RoleBinding on PCAI refers to it.
 serviceAccountName: chatbot
@@ -16,6 +16,11 @@ mlis:
 aieToken:
   namespace: project-user-gitops-bot
   secret: access-token
+
+# Secret with key "token": API token of the model endpoint (AIE: Model Endpoints >
+# Generate API Token). Created by the provider, never stored in Git. Empty: not used.
+modelToken:
+  secret: model-api-token
 
 resources:
   requests: {cpu: 100m, memory: 256Mi}
