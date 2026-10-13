@@ -24,6 +24,7 @@ MODEL_TOKEN_FILE = os.environ.get("MODEL_TOKEN_FILE", "")
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT", "You are a concise assistant running on HPE Private Cloud AI.")
 SA_DIR = os.environ.get("SA_DIR", "/var/run/secrets/kubernetes.io/serviceaccount")
+APP_VERSION = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")).read().strip()
 
 # The demo PCAI uses self-signed certificates; TLS_VERIFY=false skips the check.
 TLS_VERIFY = os.environ.get("TLS_VERIFY", "true").lower() != "false"
@@ -183,7 +184,7 @@ footer {display: none !important}
 
 with gr.Blocks(title="PCAI GitOps Chat") as demo:
     with gr.Column(elem_id="hpe-bar"):
-        gr.Markdown("## HPE Private Cloud AI · GitOps chat demo\n"
+        gr.Markdown(f"## HPE Private Cloud AI · GitOps chat demo · version {APP_VERSION}\n"
                     "Model served by MLIS, application and model deployed by Argo CD.")
         status = gr.Markdown()
     show_reasoning = gr.Checkbox(label="Show reasoning (Qwen3 thinking mode)", value=False, render=False)
