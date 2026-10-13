@@ -13,6 +13,7 @@ data:
   MLIS_DEPLOYMENT: {{ .Values.mlis.deployment | quote }}
   TOKEN_NAMESPACE: {{ .Values.aieToken.namespace | quote }}
   TOKEN_SECRET: {{ .Values.aieToken.secret | quote }}
+  TLS_VERIFY: {{ .Values.tls.verify | toString | quote }}
   {{- if .Values.modelToken.secret }}
   MODEL_TOKEN_FILE: /var/run/secrets/model-api/token
   {{- end }}

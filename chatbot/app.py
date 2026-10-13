@@ -25,8 +25,18 @@ SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT", "You are a concise assistant running on HPE Private Cloud AI.")
 SA_DIR = os.environ.get("SA_DIR", "/var/run/secrets/kubernetes.io/serviceaccount")
 
+# The demo PCAI uses self-signed certificates; TLS_VERIFY=false skips the check.
+TLS_VERIFY = os.environ.get("TLS_VERIFY", "true").lower() != "false"
+
+
+def tls_context(cafile=None):
+    if not TLS_VERIFY:
+        return ssl._create_unverified_context()
+    return ssl.create_default_context(cafile=cafile)
+
+
 # Kyverno in AI Essentials mounts the platform CA and sets this variable.
-TLS = ssl.create_default_context(cafile=os.environ.get("EZUA_DOMAIN_CA_CERT_PATH") or None)
+TLS = tls_context(os.environ.get("EZUA_DOMAIN_CA_CERT_PATH") or None)
 
 _cache = {}
 
@@ -57,7 +67,7 @@ def aie_token():
         port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
         if ":" in host:
             host = f"[{host}]"
-        ctx = ssl.create_default_context(cafile=os.path.join(SA_DIR, "ca.crt"))
+        ctx = tls_context(os.path.join(SA_DIR, "ca.crt"))
         secret = get_json(f"https://{host}:{port}/api/v1/namespaces/{TOKEN_NAMESPACE}"
                           f"/secrets/{TOKEN_SECRET}", sa_token, ctx)
         return base64.b64decode(secret["data"]["AUTH_TOKEN"]).decode().strip()

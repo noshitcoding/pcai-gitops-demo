@@ -15,6 +15,14 @@ import urllib.request
 
 SA_DIR = os.environ.get("SA_DIR", "/var/run/secrets/kubernetes.io/serviceaccount")
 POLL_SECONDS = int(os.environ.get("MLIS_POLL_SECONDS", "15"))
+# The demo PCAI uses self-signed certificates; TLS_VERIFY=false skips the check.
+TLS_VERIFY = os.environ.get("TLS_VERIFY", "true").lower() != "false"
+
+
+def tls_context(cafile=None):
+    if not TLS_VERIFY:
+        return ssl._create_unverified_context()
+    return ssl.create_default_context(cafile=cafile)
 
 
 def log(msg):
@@ -53,7 +61,7 @@ def read_aie_token(ref):
     """AIE keeps a short-lived access token of the user in that user's namespace."""
     with open(os.path.join(SA_DIR, "token")) as f:
         sa_token = f.read().strip()
-    ctx = ssl.create_default_context(cafile=os.path.join(SA_DIR, "ca.crt"))
+    ctx = tls_context(os.path.join(SA_DIR, "ca.crt"))
     secret = call("GET", kube_url(f"/api/v1/namespaces/{ref['namespace']}/secrets/{ref['name']}"),
                   sa_token, ctx=ctx)
     value = (secret.get("data") or {}).get(ref.get("key", "AUTH_TOKEN"), "")
@@ -69,7 +77,7 @@ class Mlis:
         self.token = token
         self.project = project
         cafile = os.environ.get("MLIS_CA_FILE") or os.environ.get("EZUA_DOMAIN_CA_CERT_PATH")
-        self.ctx = ssl.create_default_context(cafile=cafile or None)
+        self.ctx = tls_context(cafile or None)
 
     def req(self, method, path, body=None):
         return call(method, self.base + path, self.token, body, self.ctx)

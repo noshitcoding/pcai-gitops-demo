@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/noshitcoding/pcai-chatbot
-  tag: "0.1.2"
+  tag: "0.1.3"
 
 # Fixed name: the token reader RoleBinding on PCAI refers to it.
 serviceAccountName: chatbot
@@ -21,6 +21,10 @@ aieToken:
 # Generate API Token). Created by the provider, never stored in Git. Empty: not used.
 modelToken:
   secret: model-api-token
+
+# Demo: PCAI uses self-signed certificates, so TLS is not verified. Set true in production.
+tls:
+  verify: false
 
 resources:
   requests: {cpu: 100m, memory: 256Mi}

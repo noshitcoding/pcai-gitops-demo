@@ -24,6 +24,9 @@ spec:
           image: python:3.12-slim
           command: ["python3", "-u", "/app/mlis_sync.py", "/config/model.json"]
           env:
+            # Demo: PCAI uses self-signed certificates. Set "true" in production.
+            - name: TLS_VERIFY
+              value: "false"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
