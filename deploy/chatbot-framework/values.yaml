@@ -19,7 +19,7 @@ framework:
 chatbotValues:
   image:
     repository: ghcr.io/noshitcoding/pcai-chatbot
-    tag: "0.1.3"
+    tag: "0.1.4"
   mlis:
     url: https://mlis.${DOMAIN_NAME}
     project: gitops-demo
