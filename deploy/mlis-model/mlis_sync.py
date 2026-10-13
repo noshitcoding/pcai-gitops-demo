@@ -155,15 +155,20 @@ def ensure_deployment(api, spec, model, model_changed, strategy, timeout):
         if current.get("namespace") != spec["namespace"]:
             raise SystemExit("The namespace of an existing deployment cannot change; set state absent first.")
         compare = {k: v for k, v in body.items() if k not in ("name", "namespace", "project", "model")}
+        # Also catches a model version left over by an interrupted earlier run.
+        model_changed = model_changed or current.get("model") not in (model.get("id"), model["name"])
         if not model_changed and not differs(compare, current):
             log(f"deployment {spec['name']} unchanged")
             return wait_status(api, spec["name"], {goal}, timeout)
         update = {k: v for k, v in body.items() if k not in ("name", "namespace")}
         update["canaryTrafficPercent"] = 100
-        if strategy == "pause-edit-resume" and goal == "Ready" and current.get("status") != "Paused":
-            # A rolling update needs a second GPU; pausing frees the only one first.
+        # MLIS only switches the model of a paused deployment; pausing also frees the only GPU.
+        must_pause = model_changed or (strategy == "pause-edit-resume" and goal == "Ready")
+        if must_pause and current.get("status") != "Paused":
             log(f"pause deployment {spec['name']} before the update")
-            api.req("PUT", f"/deployments/{current['id']}", dict(update, goalStatus="Paused"))
+            pause = {k: current[k] for k in ("model", "security", "autoScaling", "environment", "arguments")
+                     if current.get(k) is not None}
+            api.req("PUT", f"/deployments/{current['id']}", dict(pause, goalStatus="Paused"))
             wait_status(api, spec["name"], {"Paused"}, 900)
         log(f"update deployment {spec['name']}")
         api.req("PUT", f"/deployments/{current['id']}", update)
