@@ -12,6 +12,8 @@ framework:
   category: dataScience
   description: Chat with Qwen3 8B served by MLIS. Deployed by Argo CD from Git.
   namespace: project-gitops-demo
+  # AIE runs helm upgrade --install --atomic: a broken release is rolled back after this time.
+  helmTimeout: 5m
 
 # Values for the pcai-chatbot chart. AI Essentials replaces ${DOMAIN_NAME}.
 chatbotValues:

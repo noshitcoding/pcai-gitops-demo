@@ -22,7 +22,7 @@ spec:
     # The admission webhook accepts only strings here.
     namespace: {{ .Values.framework.namespace | quote }}
     create-namespace: "false"
-    timeout: 15m
+    timeout: {{ .Values.framework.helmTimeout | quote }}
     wait: "false"
   values: |
     {{- toYaml .Values.chatbotValues | nindent 4 }}
