@@ -160,13 +160,15 @@ def ensure_deployment(api, spec, model, model_changed, strategy, timeout):
         if not model_changed and not differs(compare, current):
             log(f"deployment {spec['name']} unchanged")
             return wait_status(api, spec["name"], {goal}, timeout)
-        update = {k: v for k, v in body.items() if k not in ("name", "namespace")}
+        # PUT replaces the object: without name MLIS treats the request as a rename.
+        update = dict(body)
         update["canaryTrafficPercent"] = 100
         # MLIS only switches the model of a paused deployment; pausing also frees the only GPU.
         must_pause = model_changed or (strategy == "pause-edit-resume" and goal == "Ready")
         if must_pause and current.get("status") != "Paused":
             log(f"pause deployment {spec['name']} before the update")
-            pause = {k: current[k] for k in ("model", "security", "autoScaling", "environment", "arguments")
+            pause = {k: current[k] for k in ("name", "namespace", "project", "model", "security",
+                                             "autoScaling", "environment", "arguments")
                      if current.get(k) is not None}
             api.req("PUT", f"/deployments/{current['id']}", dict(pause, goalStatus="Paused"))
             wait_status(api, spec["name"], {"Paused"}, 900)
