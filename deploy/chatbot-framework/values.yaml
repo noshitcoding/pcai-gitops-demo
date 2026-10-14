@@ -1,7 +1,7 @@
 # Change chart.version (and publish that chart release) to roll out a new chatbot version.
 chart:
   name: pcai-chatbot
-  version: 0.3.0
+  version: 0.4.0
   releaseUrl: https://github.com/noshitcoding/pcai-gitops-demo/releases/download
   museum: http://chartmuseum.ez-chartmuseum-ns.svc.cluster.local:8080
 
@@ -19,16 +19,13 @@ framework:
 chatbotValues:
   image:
     repository: ghcr.io/noshitcoding/pcai-chatbot
-    tag: "0.1.4"
-  mlis:
-    url: https://mlis.${DOMAIN_NAME}
-    project: gitops-demo
+    tag: "0.2.0"
+  model:
     deployment: qwen3-8b-chat
-  aieToken:
-    namespace: project-user-gitops-bot
-    secret: access-token
+    endpoint: ""
   modelToken:
     secret: model-api-token
+    warnDays: 30
   # Demo: PCAI uses self-signed certificates. Set true in production.
   tls:
     verify: false
