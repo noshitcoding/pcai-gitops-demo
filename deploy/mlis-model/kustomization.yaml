@@ -3,8 +3,9 @@ kind: Kustomization
 resources:
   - serviceaccount.yaml
   - sync-job.yaml
+  - token-watch.yaml
 configMapGenerator:
   - name: mlis-model
     files: [model.json]
   - name: mlis-sync-script
-    files: [mlis_sync.py]
+    files: [mlis_sync.py, token_watch.py]

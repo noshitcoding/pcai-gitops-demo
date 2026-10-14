@@ -1,0 +1,53 @@
+# Checks every day that the tokens of this setup still work. A failed run turns the
+# Argo CD application Degraded (health check in argocd-cm); the job log names the action.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: token-watch
+spec:
+  schedule: "17 6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: token-watch
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          serviceAccountName: mlis-sync
+          restartPolicy: Never
+          containers:
+            - name: watch
+              image: python:3.12-slim
+              command: ["python3", "-u", "/app/token_watch.py", "/config/model.json"]
+              env:
+                # Demo: PCAI uses self-signed certificates. Set "true" in production.
+                - name: TLS_VERIFY
+                  value: "false"
+                # Days before expiry of the endpoint API token from which the check fails.
+                # Demo: the lab token has the default lifetime of 30 days; use 30 with a 365-day token.
+                - name: MIN_DAYS
+                  value: "14"
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 500m, memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: script, mountPath: /app, readOnly: true}
+                - {name: config, mountPath: /config, readOnly: true}
+                - {name: model-api-token, mountPath: /model-api, readOnly: true}
+          volumes:
+            - name: script
+              configMap: {name: mlis-sync-script}
+            - name: config
+              configMap: {name: mlis-model}
+            - name: model-api-token
+              secret: {secretName: model-api-token, optional: true}

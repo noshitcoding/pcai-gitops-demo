@@ -1,26 +1,25 @@
 image:
   repository: ghcr.io/noshitcoding/pcai-chatbot
-  tag: "0.1.3"
+  tag: "0.2.0"
 
-# Fixed name: the token reader RoleBinding on PCAI refers to it.
+# Fixed name: the app reads the InferenceService of the model with this account.
 serviceAccountName: chatbot
 
 service:
   port: 80
 
-mlis:
-  url: https://mlis.pcai3.ctc.sg.lab
-  project: gitops-demo
+# MLIS deployment (= KServe InferenceService in this namespace) that serves the model.
+model:
   deployment: qwen3-8b-chat
-
-aieToken:
-  namespace: project-user-gitops-bot
-  secret: access-token
+  # Optional fixed endpoint URL; empty: read status.url of the InferenceService.
+  endpoint: ""
 
 # Secret with key "token": API token of the model endpoint (AIE: Model Endpoints >
-# Generate API Token). Created by the provider, never stored in Git. Empty: not used.
+# Generate API Token). Created by the provider, never stored in Git.
 modelToken:
   secret: model-api-token
+  # The status line warns this many days before the token expires.
+  warnDays: 30
 
 # Demo: PCAI uses self-signed certificates, so TLS is not verified. Set true in production.
 tls:

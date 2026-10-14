@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py VERSION ./
+COPY app.py backend.py VERSION ./
 # AI Essentials sets the project UID at runtime; the app only writes to /tmp.
 USER 10001
 EXPOSE 7860

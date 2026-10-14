@@ -19,3 +19,4 @@ spec:
     - {group: "", kind: ConfigMap}
     - {group: "", kind: ServiceAccount}
     - {group: batch, kind: Job}
+    - {group: batch, kind: CronJob}

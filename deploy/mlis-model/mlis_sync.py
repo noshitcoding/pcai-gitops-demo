@@ -15,7 +15,7 @@ import urllib.request
 
 SA_DIR = os.environ.get("SA_DIR", "/var/run/secrets/kubernetes.io/serviceaccount")
 POLL_SECONDS = int(os.environ.get("MLIS_POLL_SECONDS", "15"))
-# The demo PCAI uses self-signed certificates; TLS_VERIFY=false skips the check.
+# TLS_VERIFY=false skips the certificate check; only for tests with self-signed certificates.
 TLS_VERIFY = os.environ.get("TLS_VERIFY", "true").lower() != "false"
 
 
@@ -30,7 +30,9 @@ def log(msg):
 
 
 class ApiError(Exception):
-    pass
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def call(method, url, token, body=None, ctx=None):
@@ -45,7 +47,7 @@ def call(method, url, token, body=None, ctx=None):
             raw = resp.read()
     except urllib.error.HTTPError as err:
         detail = err.read().decode(errors="replace")[:400]
-        raise ApiError(f"{method} {url} -> HTTP {err.code}: {detail}") from None
+        raise ApiError(f"{method} {url} -> HTTP {err.code}: {detail}", err.code) from None
     return json.loads(raw) if raw.strip() else None
 
 
@@ -55,6 +57,15 @@ def kube_url(path):
     if ":" in host:
         host = f"[{host}]"
     return f"https://{host}:{port}{path}"
+
+
+def jwt_claims(token):
+    part = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+
+
+def utc(seconds):
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(seconds))
 
 
 def read_aie_token(ref):
@@ -68,7 +79,27 @@ def read_aie_token(ref):
     token = base64.b64decode(value).decode().strip() if value else ""
     if not token:
         raise SystemExit("The AIE access token is empty: sign in once as the technical user.")
+    exp = jwt_claims(token).get("exp", 0)
+    if exp and exp < time.time():
+        raise SystemExit(f"The AIE access token expired at {utc(exp)}: AIE no longer renews it. "
+                         "Sign in once as the technical user; check its PCAI role and the AIE licence.")
     return token
+
+
+class AieToken:
+    """AIE renews the token every few minutes, so it is read again instead of kept for the whole run."""
+
+    def __init__(self, ref, max_age=60):
+        self.ref = ref
+        self.max_age = max_age
+        self.value = ""
+        self.read_at = 0.0
+
+    def get(self, fresh=False):
+        if fresh or not self.value or time.time() - self.read_at > self.max_age:
+            self.value = read_aie_token(self.ref)
+            self.read_at = time.time()
+        return self.value
 
 
 class Mlis:
@@ -80,7 +111,12 @@ class Mlis:
         self.ctx = tls_context(cafile or None)
 
     def req(self, method, path, body=None):
-        return call(method, self.base + path, self.token, body, self.ctx)
+        try:
+            return call(method, self.base + path, self.token.get(), body, self.ctx)
+        except ApiError as err:
+            if err.code != 401:
+                raise
+            return call(method, self.base + path, self.token.get(fresh=True), body, self.ctx)
 
     def find(self, kind, name):
         for item in self.req("GET", f"/{kind}") or []:
@@ -206,7 +242,7 @@ def remove_all(api, cfg):
 def main(path):
     with open(path) as f:
         cfg = json.load(f)
-    api = Mlis(cfg["mlisUrl"], read_aie_token(cfg["tokenSecret"]), cfg["project"])
+    api = Mlis(cfg["mlisUrl"], AieToken(cfg["tokenSecret"]), cfg["project"])
     log(f"MLIS {cfg['mlisUrl']}, project {cfg['project']}, desired state {cfg.get('state', 'present')}")
     if cfg.get("state", "present") == "absent":
         remove_all(api, cfg)

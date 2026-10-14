@@ -13,7 +13,10 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: chart-upload
-        # Keep the public CA bundle: the job downloads from github.com.
+        # AIE adds its outbound proxy settings, if the system has a proxy.
+        add-ezua-proxy: "true"
+        # Keep the image's public CA bundle for the download. Behind a TLS-inspecting proxy remove
+        # this label and add the proxy CA to AIE (secret with label ezua-user-ca-cert in istio-system).
         add-ezua-domain-ca-cert: "false"
       annotations:
         sidecar.istio.io/inject: "false"
@@ -32,12 +35,19 @@ spec:
           args:
             - |
               cd /tmp
-              if curl -fsS "$MUSEUM/api/charts/$NAME/$VERSION" >/dev/null 2>&1; then
-                echo "chart $NAME $VERSION is already in the chart museum"; exit 0
-              fi
               curl -fsSL -o chart.tgz "$RELEASES/$NAME-$VERSION/$NAME-$VERSION.tgz"
+              want=$(sha256sum chart.tgz | cut -d' ' -f1)
+              # The chart museum accepts uploads without authentication: never trust an existing entry.
+              if info=$(curl -fsS "$MUSEUM/api/charts/$NAME/$VERSION" 2>/dev/null); then
+                have=$(printf '%s' "$info" | grep -o '"digest":"[0-9a-f]*"' | cut -d'"' -f4)
+                if [ "$have" = "$want" ]; then
+                  echo "chart $NAME $VERSION in the chart museum matches the release ($want)"; exit 0
+                fi
+                echo "chart $NAME $VERSION in the chart museum differs from the release: museum $have, release $want" >&2
+                exit 1
+              fi
               curl -fsS --data-binary @chart.tgz "$MUSEUM/api/charts"
-              echo; echo "uploaded $NAME $VERSION"
+              echo; echo "uploaded $NAME $VERSION ($want)"
           resources:
             requests: {cpu: 20m, memory: 32Mi}
             limits: {cpu: 200m, memory: 128Mi}

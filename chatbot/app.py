@@ -1,127 +1,18 @@
 """Small chat front end for a model that MLIS serves on HPE Private Cloud AI.
 
-The app finds the model endpoint through the MLIS API with the access token that
-AI Essentials keeps for the technical user. Inference requests use the API token
-that an administrator generated for the endpoint (mounted from a secret).
+Model access is in backend.py: the endpoint comes from the InferenceService in this
+namespace, inference uses the endpoint API token mounted from a Secret.
 """
-import base64
-import json
 import os
-import ssl
-import time
 import urllib.error
-import urllib.request
 
 import gradio as gr
 
-MLIS_URL = os.environ.get("MLIS_URL", "").rstrip("/")
-PROJECT = os.environ.get("MLIS_PROJECT", "")
-DEPLOYMENT = os.environ.get("MLIS_DEPLOYMENT", "")
-TOKEN_NAMESPACE = os.environ.get("TOKEN_NAMESPACE", "")
-TOKEN_SECRET = os.environ.get("TOKEN_SECRET", "access-token")
-MODEL_ENDPOINT = os.environ.get("MODEL_ENDPOINT", "").rstrip("/")
-MODEL_TOKEN_FILE = os.environ.get("MODEL_TOKEN_FILE", "")
+import backend
+
 SYSTEM_PROMPT = os.environ.get(
     "SYSTEM_PROMPT", "You are a concise assistant running on HPE Private Cloud AI.")
-SA_DIR = os.environ.get("SA_DIR", "/var/run/secrets/kubernetes.io/serviceaccount")
 APP_VERSION = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "VERSION")).read().strip()
-
-# The demo PCAI uses self-signed certificates; TLS_VERIFY=false skips the check.
-TLS_VERIFY = os.environ.get("TLS_VERIFY", "true").lower() != "false"
-
-
-def tls_context(cafile=None):
-    if not TLS_VERIFY:
-        return ssl._create_unverified_context()
-    return ssl.create_default_context(cafile=cafile)
-
-
-# Kyverno in AI Essentials mounts the platform CA and sets this variable.
-TLS = tls_context(os.environ.get("EZUA_DOMAIN_CA_CERT_PATH") or None)
-
-_cache = {}
-
-
-def cached(key, ttl, load):
-    hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
-        return hit[1]
-    value = load()
-    _cache[key] = (time.time(), value)
-    return value
-
-
-def get_json(url, token, ctx):
-    req = urllib.request.Request(url, headers={
-        "Authorization": "Bearer " + token, "Accept": "application/json"})
-    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
-        return json.load(resp)
-
-
-def aie_token():
-    def load():
-        if os.environ.get("AIE_TOKEN"):
-            return os.environ["AIE_TOKEN"]
-        with open(os.path.join(SA_DIR, "token")) as f:
-            sa_token = f.read().strip()
-        host = os.environ.get("KUBERNETES_SERVICE_HOST", "kubernetes.default.svc")
-        port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
-        if ":" in host:
-            host = f"[{host}]"
-        ctx = tls_context(os.path.join(SA_DIR, "ca.crt"))
-        secret = get_json(f"https://{host}:{port}/api/v1/namespaces/{TOKEN_NAMESPACE}"
-                          f"/secrets/{TOKEN_SECRET}", sa_token, ctx)
-        return base64.b64decode(secret["data"]["AUTH_TOKEN"]).decode().strip()
-    return cached("token", 60, load)
-
-
-def model_token():
-    # Read on every request: Kubernetes updates the mounted secret after a rotation.
-    if MODEL_TOKEN_FILE and os.path.exists(MODEL_TOKEN_FILE):
-        with open(MODEL_TOKEN_FILE) as f:
-            token = f.read().strip()
-        if token:
-            return token
-    return aie_token()
-
-
-def deployment():
-    def load():
-        for dep in get_json(MLIS_URL + "/api/v1/deployments", aie_token(), TLS):
-            if dep.get("name") == DEPLOYMENT and dep.get("project", "") in ("", PROJECT):
-                return dep
-        return None
-    return cached("deployment", 20, load)
-
-
-def endpoint():
-    if MODEL_ENDPOINT:
-        return MODEL_ENDPOINT
-    dep = deployment()
-    if dep is None:
-        raise RuntimeError(f"MLIS deployment '{DEPLOYMENT}' does not exist yet.")
-    url = ((dep.get("state") or {}).get("endpoint") or "").rstrip("/")
-    if dep.get("status") != "Ready" or not url:
-        raise RuntimeError(f"The model is not ready yet (MLIS status: {dep.get('status')}).")
-    return url
-
-
-def model_id(url):
-    return cached("model:" + url, 300,
-                  lambda: get_json(url + "/v1/models", model_token(), TLS)["data"][0]["id"])
-
-
-def status_text():
-    try:
-        dep = deployment() if not MODEL_ENDPOINT else None
-        if MODEL_ENDPOINT:
-            return f"Endpoint `{MODEL_ENDPOINT}` (fixed)"
-        if dep is None:
-            return f"MLIS deployment `{DEPLOYMENT}`: not created yet"
-        url = (dep.get("state") or {}).get("endpoint") or "-"
-        return f"MLIS deployment `{DEPLOYMENT}` · status **{dep.get('status')}** · `{url}`"
-    except Exception as err:  # shown in the UI, never fatal
-        return f"MLIS not reachable: {err}"
 
 
 def text_of(content):
@@ -134,45 +25,24 @@ def text_of(content):
 
 
 def chat(message, history, show_reasoning):
-    try:
-        url = endpoint()
-        model = model_id(url)
-    except Exception as err:
-        yield f"Not available: {err}"
-        return
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for item in history:
         text = text_of(item.get("content"))
         if item.get("role") in ("user", "assistant") and text:
             messages.append({"role": item["role"], "content": text})
     messages.append({"role": "user", "content": text_of(message)})
-    body = {
-        "model": model, "messages": messages, "stream": True,
-        "max_tokens": 1024, "temperature": 0.7, "top_p": 0.8,
-        "chat_template_kwargs": {"enable_thinking": bool(show_reasoning)},
-    }
-    req = urllib.request.Request(url + "/v1/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Authorization": "Bearer " + model_token(),
-                                          "Content-Type": "application/json"})
-    reasoning, answer = "", ""
+    answer = ""
     try:
-        with urllib.request.urlopen(req, context=TLS, timeout=600) as resp:
-            for raw in resp:
-                line = raw.decode("utf-8", "replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                delta = json.loads(data)["choices"][0].get("delta") or {}
-                reasoning += delta.get("reasoning_content") or delta.get("reasoning") or ""
-                answer += delta.get("content") or ""
-                shown = answer
-                if show_reasoning and reasoning:
-                    shown = "> " + reasoning.strip().replace("\n", "\n> ") + "\n\n" + answer
-                yield shown
+        for reasoning, answer in backend.stream_chat(messages, show_reasoning):
+            shown = answer
+            if show_reasoning and reasoning:
+                shown = "> " + reasoning.strip().replace("\n", "\n> ") + "\n\n" + answer
+            yield shown
     except urllib.error.HTTPError as err:
-        yield answer + f"\n\nRequest failed: HTTP {err.code}"
+        hint = " (endpoint API token missing, expired or revoked)" if err.code in (401, 403) else ""
+        yield answer + f"\n\nRequest failed: HTTP {err.code}{hint}"
+    except Exception as err:
+        yield f"Not available: {err}"
 
 
 THEME = gr.themes.Base(primary_hue=gr.themes.colors.emerald, font=["Arial", "sans-serif"])
@@ -189,7 +59,7 @@ with gr.Blocks(title="PCAI GitOps Chat") as demo:
         status = gr.Markdown()
     show_reasoning = gr.Checkbox(label="Show reasoning (Qwen3 thinking mode)", value=False, render=False)
     gr.ChatInterface(chat, additional_inputs=[show_reasoning])
-    demo.load(status_text, None, status)
+    demo.load(backend.status_text, None, status)
 
 if __name__ == "__main__":
     demo.queue().launch(server_name="0.0.0.0", server_port=7860, theme=THEME, css=CSS,
